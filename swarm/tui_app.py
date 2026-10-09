@@ -14,7 +14,12 @@ from textual.reactive import reactive
 from textual.timer import Timer
 from textual.binding import Binding
 
-from .core import EventBus, LogEvent, EventType
+try:
+    # When used as part of the swarm package
+    from .core import EventBus, LogEvent, EventType
+except ImportError:
+    # When used directly or in tests
+    from core import EventBus, LogEvent, EventType
 from .planner import Task
 
 
