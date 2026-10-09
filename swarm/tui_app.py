@@ -64,10 +64,9 @@ class SwarmTUI(App):
                     id="tasks-panel",
                 ),
                 Vertical(
-                    TabbedContent(
+                    with TabbedContent(id="tabs"):
                         TabPane("All Agents", id="all-agents-tab"),
                         TabPane("Orchestrator", id="orchestrator-tab"),
-                        id="tabs",
                     ),
                     id="tabs-panel",
                 ),
