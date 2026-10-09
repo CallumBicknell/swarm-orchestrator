@@ -46,6 +46,13 @@ Footer {
     height: 70%;
 }
 
+#input-panel {
+    height: auto;
+    margin: 1 0;
+    padding: 1;
+    border: solid #333333;
+}
+
 #app-grid {
     layout: grid;
     grid-size: 2;
@@ -87,15 +94,32 @@ TabPane {
 
 Label {
     color: #ffffff;
-    text-style: normal;
+}
+
+Input {
+    background: #1a1a1a;
+    color: #ffffff;
+    border: solid #333333;
+    margin: 0 1;
+}
+
+Input:focus {
+    border: solid #007acc;
+    background: #2a2a2a;
 }
 
 Button {
     background: #007acc;
     color: #ffffff;
     text-style: bold;
+    margin: 0 1;
+    min-width: 20;
 }
 
 Button:hover {
     background: #0099ff;
+}
+
+Button:focus {
+    border: thick #007acc;
 }

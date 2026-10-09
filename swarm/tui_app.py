@@ -8,18 +8,21 @@ from datetime import datetime
 from typing import Dict, List, Optional, Set
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, DataTable, Label, Static, TabbedContent, TabPane, Button
+from textual.widgets import Header, Footer, DataTable, Label, Static, TabbedContent, TabPane, Button, Input
 from textual.widgets import DataTable
 from textual.reactive import reactive
 from textual.timer import Timer
 from textual.binding import Binding
 
+
 try:
     # When used as part of the swarm package
     from .core import EventBus, LogEvent, EventType
+    from .orchestrator import SwarmOrchestrator
 except ImportError:
     # When used directly or in tests
     from core import EventBus, LogEvent, EventType
+    from orchestrator import SwarmOrchestrator
 
 try:
     # When used as part of the swarm package
@@ -49,6 +52,7 @@ class SwarmTUI(App):
         self.tasks: Dict[str, Task] = {}
         self.logs: List[LogEvent] = []
         self.selected_task_id: Optional[str] = None
+        self.orchestrator_task: Optional[asyncio.Task] = None
         # Subscribe to events
         self._event_queue: asyncio.Queue = asyncio.Queue()
         self.event_bus._subscribers.add(self._event_queue)
@@ -57,27 +61,35 @@ class SwarmTUI(App):
         """Create child widgets for the app."""
         yield Header()
         yield Container(
-            Horizontal(
-                Vertical(
-                    Static("Tasks", classes="title"),
-                    DataTable(id="task-table"),
-                    id="tasks-panel",
-                ),
-                Vertical(
-                    with TabbedContent(id="tabs"):
-                        TabPane("All Agents", id="all-agents-tab"),
-                        TabPane("Orchestrator", id="orchestrator-tab"),
-                    ),
-                    id="tabs-panel",
-                ),
-                id="main-container",
-            ),
             Vertical(
-                Static("Logs", classes="title"),
-                Label(id="log-display"),
-                id="logs-panel",
+                Static("Enter Goal:", classes="title"),
+                Horizontal(
+                    Input(placeholder="Enter your goal here...", id="goal-input"),
+                    Button("Start Orchestrator", id="start-button", variant="primary"),
+                    id="input-container",
+                ),
+                id="input-panel",
             ),
-            id="app-grid",
+            Container(
+                Horizontal(
+                    Vertical(
+                        Static("Tasks", classes="title"),
+                        DataTable(id="task-table"),
+                        id="tasks-panel",
+                    ),
+                    Vertical(
+                        TabbedContent(id="tabs"),
+                        id="tabs-panel",
+                    ),
+                    id="main-container",
+                ),
+                Vertical(
+                    Static("Logs", classes="title"),
+                    Label(id="log-display"),
+                    id="logs-panel",
+                ),
+                id="app-grid",
+            ),
         )
         yield Footer()
 
@@ -85,6 +97,38 @@ class SwarmTUI(App):
         """Called when the app is mounted."""
         self.setup_task_table()
         self.set_interval(1 / 4, self.update_from_queue)  # Update 4 times per second
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses."""
+        if event.button.id == "start-button":
+            goal_input = self.query_one("#goal-input", Input)
+            goal = goal_input.value
+            if goal:
+                self.notify(f"Starting orchestrator with goal: {goal}")
+                self.start_orchestrator(goal)
+        elif event.button.id == "back-to-tabs":
+            self.query_one("#tabs").active = "all-agents-tab"
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Handle input submission."""
+        if event.input.id == "goal-input":
+            goal = event.value
+            if goal:
+                self.notify(f"Starting orchestrator with goal: {goal}")
+                self.start_orchestrator(goal)
+
+    def start_orchestrator(self, goal: str) -> None:
+        """Start the orchestrator with the given goal."""
+        if self.orchestrator_task and not self.orchestrator_task.done():
+            self.notify("Orchestrator is already running!")
+            return
+
+        # Clear input
+        goal_input = self.query_one("#goal-input", Input)
+        goal_input.value = ""
+
+        # Start orchestrator in background
+        self.orchestrator_task = asyncio.create_task(self._run_orchestrator(goal))
 
     def setup_task_table(self) -> None:
         """Initialize the task table."""
@@ -162,6 +206,51 @@ class SwarmTUI(App):
         )
         self.query_one("#log-display", Label).update(log_text)
 
+    async def _run_orchestrator(self, goal: str) -> None:
+        """Run the orchestrator with the given goal."""
+        try:
+            # Create orchestrator
+            orchestrator = SwarmOrchestrator(
+                repo_path=Path("."),
+                use_fake_claude=True  # Use fake Claude for testing
+            )
+
+            # Start the run
+            run_id = await orchestrator.start_run(goal)
+            self.notify(f"Started orchestrator run: {run_id}")
+
+            # Update orchestrator tab with run info
+            await self.update_orchestrator_tab(f"Started run {run_id}: {goal}")
+
+            # Execute the run
+            success = await orchestrator.execute_run()
+
+            if success:
+                self.notify(f"Orchestrator run {run_id} completed successfully!")
+                await self.update_orchestrator_tab(f"Run {run_id} completed successfully!")
+            else:
+                self.notify(f"Orchestrator run {run_id} failed!")
+                await self.update_orchestrator_tab(f"Run {run_id} failed!")
+
+        except Exception as e:
+            self.notify(f"Error running orchestrator: {str(e)}")
+            await self.update_orchestrator_tab(f"Error: {str(e)}")
+        finally:
+            # Clean up
+            self.orchestrator_task = None
+
+    async def update_orchestrator_tab(self, message: str) -> None:
+        """Update the orchestrator tab with a message."""
+        try:
+            # Get the orchestrator tab content
+            orchestrator_tab = self.query_one("#orchestrator-tab", Label)
+            current_text = orchestrator_tab.renderable
+            new_text = f"{current_text}\n[{datetime.now().strftime('%H:%M:%S')}] {message}"
+            orchestrator_tab.update(new_text)
+        except Exception:
+            # If we can't update the tab, just log it
+            pass
+
     def action_show_all_agents(self) -> None:
         """Switch to the All Agents tab."""
         self.query_one("#tabs").active = "all-agents-tab"
@@ -186,29 +275,6 @@ class SwarmTUI(App):
                     TabPane(f"Task {self.selected_task_id}", tab_content, id=tab_id)
                 )
             self.query_one("#tabs").active = tab_id
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """When a row is selected in the task table."""
-        task_id = str(event.row_key.value)
-        self.selected_task_id = task_id
-        # Update the task-specific log
-        task_logs = [
-            log
-            for log in self.logs
-            if log.data.get("task_id") == task_id
-        ]
-        log_text = "\n".join(
-            f"[{log.timestamp.strftime('%H:%M:%S')}] {log.data.get('message', '')}"
-            for log in task_logs[-20:]
-        )
-        self.query_one(
-            f"#task-log-{self.selected_task_id}", Label
-        ).update(log_text)
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses."""
-        if event.button.id == "back-to-tabs":
-            self.query_one("#tabs").active = "all-agents-tab"
 
 
 def run_tui(event_bus: EventBus) -> None:
