@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swarm Orchestrator</title>
+    <style>
+        :root {
+            --bg-primary: #0f0f0f;
+            --bg-secondary: #1a1a1a;
+            --bg-tertiary: #212121;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --accent-blue: #007acc;
+            --accent-green: #4caf50;
+            --accent-red: #f44336;
+            --accent-yellow: #ffeb3b;
+            --border-color: #333333;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100%;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background-color: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .sidebar h2 {
+            color: var(--accent-blue);
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+
+        .task-card {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .task-card:hover {
+            background-color: var(--bg-primary);
+            transform: translateY(-2px);
+        }
+
+        .task-card.active {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 10px rgba(0, 122, 204, 0.3);
+        }
+
+        .task-status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .status-pending { background-color: #666; color: white; }
+        .status-starting { background-color: #ff9800; color: white; }
+        .status-running { background-color: #2196f3; color: white; }
+        .status-reviewing { background-color: #9c27b0; color: white; }
+        .status-retrying { background-color: #ff5722; color: white; }
+        .status-merging { background-color: #607d8b; color: white; }
+        .status-merged { background-color: var(--accent-green); color: white; }
+        .status-failed { background-color: var(--accent-red); color: white; }
+        .status-skipped { background-color: #9e9e9e; color: white; }
+
+        .task-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .task-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .task-deps {
+            font-size: 0.8em;
+            color: var(--accent-yellow);
+            margin-top: 5px;
+        }
+
+        .task-deps span {
+            background-color: rgba(255, 235, 59, 0.2);
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+
+        /* Tabs container */
+        .tabs-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-primary);
+        }
+
+        .tabs-header {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 20px;
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            background-color: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1em;
+            position: relative;
+        }
+
+        .tab-button.active {
+            color: var(--text-primary);
+            border-bottom: 3px solid var(--accent-blue);
+        }
+
+        .tab-button:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Log display */
+        .log-display {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            height: 400px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            line-height: 1.4;
+            margin-bottom: 20px;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-left: 3px solid var(--accent-blue);
+            background-color: rgba(0, 122, 204, 0.1);
+        }
+
+        .log-timestamp {
+            color: var(--text-secondary);
+            font-size: 0.8em;
+            margin-right: 10px;
+        }
+
+        .log-task-id {
+            color: var(--accent-yellow);
+            font-weight: bold;
+        }
+
+        .log-message {
+            color: var(--text-primary);
+        }
+
+        /* Approval banner */
+        .approval-banner {
+            background-color: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .approval-banner.visible {
+            display: block;
+        }
+
+        .approval-banner.hidden {
+            display: none;
+        }
+
+        .approval-button {
+            background-color: var(--accent-green);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 8px;
+            font-weight: bold;
+        }
+
+        .approval-button.abort {
+            background-color: var(--accent-red);
+        }
+
+        .approval-button:hover {
+            opacity: 0.9;
+        }
+
+        /* Done banner */
+        .done-banner {
+            background-color: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .done-banner.visible {
+            display: block;
+        }
+
+        .done-banner.hidden {
+            display: none;
+        }
+
+        /* Filter controls */
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-button {
+            padding: 8px 16px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .filter-button.active {
+            background-color: var(--accent-blue);
+        }
+
+        /* Task prompt disclosure */
+        .task-prompt {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .task-prompt h3 {
+            color: var(--accent-blue);
+            margin-bottom: 10px;
+        }
+
+        .task-prompt-content {
+            background-color: var(--bg-primary);
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 0.9em;
+        }
+
+        /* Stats panel */
+        .stats-panel {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stats-panel h3 {
+            color: var(--accent-blue);
+            margin-bottom: 15px;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                height: 200px;
+            }
+
+            .tabs-container {
+                height: calc(100vh - 200px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h2>Swarm Orchestrator</h2>
+
+            <!-- Stats Panel -->
+            <div class="stats-panel">
+                <h3>Statistics</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Total Tasks:</span>
+                    <span class="stat-value" id="total-tasks">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Completed:</span>
+                    <span class="stat-value" id="completed-tasks">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Running:</span>
+                    <span class="stat-value" id="running-tasks">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Failed:</span>
+                    <span class="stat-value" id="failed-tasks">0</span>
+                </div>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="filter-controls">
+                <button class="filter-button active" data-filter="all">All</button>
+                <button class="filter-button" data-filter="orchestrator">Orchestrator</button>
+                <button class="filter-button" data-filter="task">Tasks</button>
+            </div>
+
+            <!-- Task Cards Container -->
+            <div id="task-cards-container">
+                <!-- Task cards will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Tabs Container -->
+        <div class="tabs-container">
+            <div class="tabs-header">
+                <button class="tab-button active" data-tab="all-agents">All Agents</button>
+                <button class="tab-button" data-tab="orchestrator">Orchestrator</button>
+                <!-- Dynamic tabs will be inserted here -->
+            </div>
+
+            <div class="tab-content active" data-tab-content="all-agents">
+                <div id="all-agents-log" class="log-display">
+                    <!-- Agent logs will appear here -->
+                </div>
+            </div>
+
+            <div class="tab-content" data-tab-content="orchestrator">
+                <div id="orchestrator-log" class="log-display">
+                    <!-- Orchestrator logs will appear here -->
+                </div>
+            </div>
+
+            <!-- Approval Banner -->
+            <div class="approval-banner hidden" id="approval-banner">
+                <div>Task requires approval</div>
+                <button class="approval-button" id="approve-button">Approve</button>
+                <button class="approval-button abort" id="abort-button">Abort</button>
+            </div>
+
+            <!-- Done Banner -->
+            <div class="done-banner hidden" id="done-banner">
+                <div>All tasks completed!</div>
+            </div>
+
+            <!-- Task Prompt Disclosure -->
+            <div class="task-prompt hidden" id="task-prompt">
+                <h3>Task Prompt</h3>
+                <div class="task-prompt-content" id="task-prompt-content">
+                    <!-- Task prompt will appear here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Web GUI JavaScript
+        class SwarmWebGUI {
+            constructor() {
+                this.tasks = {};
+                this.logs = [];
+                this.currentTaskId = null;
+                this.sse = null;
+                this.approvalPending = false;
+
+                this.init();
+            }
+
+            init() {
+                // Set up event listeners
+                this.setupEventListeners();
+
+                // Connect to SSE
+                this.connectToSSE();
+
+                // Initialize UI
+                this.updateUI();
+            }
+
+            setupEventListeners() {
+                // Task card clicks
+                document.addEventListener('click', (e) => {
+                    if (e.target.closest('.task-card')) {
+                        const taskCard = e.target.closest('.task-card');
+                        const taskId = taskCard.dataset.taskId;
+                        this.selectTask(taskId);
+                    }
+                });
+
+                // Tab switches
+                document.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('tab-button')) {
+                        const tabName = e.target.dataset.tab;
+                        this.switchTab(tabName);
+                    }
+                });
+
+                // Filter buttons
+                document.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('filter-button')) {
+                        const filter = e.target.dataset.filter;
+                        this.setFilter(filter);
+                    }
+                });
+
+                // Approval buttons
+                document.getElementById('approve-button').addEventListener('click', () => {
+                    this.sendApproval('approve');
+                });
+
+                document.getElementById('abort-button').addEventListener('click', () => {
+                    this.sendApproval('abort');
+                });
+            }
+
+            connectToSSE() {
+                this.sse = new EventSource('/events');
+
+                this.sse.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        this.handleEvent(data);
+                    } catch (error) {
+                        console.error('Error parsing SSE event:', error);
+                    }
+                };
+
+                this.sse.onerror = (error) => {
+                    console.error('SSE error:', error);
+                    // Try to reconnect after a delay
+                    setTimeout(() => this.connectToSSE(), 3000);
+                };
+            }
+
+            handleEvent(event) {
+                // Add to logs
+                this.logs.push(event);
+                this.addLogToDisplay(event);
+
+                // Update task state if it's a task event
+                if (event.type === 'task' && event.data.task_id) {
+                    this.updateTaskState(event.data.task_id, event.data);
+                }
+
+                // Handle approval events
+                if (event.type === 'approval' || event.type === 'approved') {
+                    this.handleApprovalEvent(event);
+                }
+
+                // Update UI
+                this.updateUI();
+            }
+
+            updateTaskState(taskId, taskData) {
+                if (!this.tasks[taskId]) {
+                    this.tasks[taskId] = {
+                        id: taskId,
+                        title: taskData.title || `Task ${taskId}`,
+                        status: 'pending',
+                        attempts: 0,
+                        dependencies: [],
+                        files: [],
+                        prompt: '',
+                        cost: 0
+                    };
+                }
+
+                // Update task with new data
+                Object.assign(this.tasks[taskId], taskData);
+            }
+
+            handleApprovalEvent(event) {
+                const taskId = event.data.task_id;
+                const action = event.type === 'approval' ? 'approve' : 'abort';
+
+                // Show approval banner for this task
+                this.showApprovalBanner(taskId, action === 'approve' ? 'Approve' : 'Abort');
+
+                // Update task status
+                if (this.tasks[taskId]) {
+                    this.tasks[taskId].status = event.type === 'approved' ? 'merged' : 'reviewing';
+                }
+            }
+
+            showApprovalBanner(taskId, actionType) {
+                const banner = document.getElementById('approval-banner');
+                banner.querySelector('div').textContent = `Task ${taskId} requires ${actionType}`;
+                banner.classList.remove('hidden');
+                banner.classList.add('visible');
+                this.approvalPending = true;
+            }
+
+            hideApprovalBanner() {
+                document.getElementById('approval-banner').classList.add('hidden');
+                document.getElementById('approval-banner').classList.remove('visible');
+                this.approvalPending = false;
+            }
+
+            sendApproval(action) {
+                if (!this.approvalPending) return;
+
+                // In a real implementation, we'd get the current task ID
+                // For now, we'll use a placeholder - this would be enhanced
+                const taskId = this.currentTaskId || 'unknown';
+
+                fetch('/api/approve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Swarm': '1'
+                    },
+                    body: JSON.stringify({
+                        task_id: taskId,
+                        action: action
+                    })
+                })
+                .then(response => {
+                    if (response.ok) {
+                        this.hideApprovalBanner();
+                    } else {
+                        alert('Failed to send approval');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error sending approval:', error);
+                    alert('Error sending approval');
+                });
+            }
+
+            selectTask(taskId) {
+                this.currentTaskId = taskId;
+
+                // Update active task card
+                document.querySelectorAll('.task-card').forEach(card => {
+                    card.classList.remove('active');
+                });
+
+                const taskCard = document.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                if (taskCard) {
+                    taskCard.classList.add('active');
+                }
+
+                // Update task prompt disclosure
+                const task = this.tasks[taskId];
+                if (task) {
+                    const promptDiv = document.getElementById('task-prompt-content');
+                    promptDiv.textContent = task.prompt || 'No prompt available';
+
+                    const taskPrompt = document.getElementById('task-prompt');
+                    taskPrompt.classList.remove('hidden');
+                    taskPrompt.classList.add('visible');
+                }
+
+                // Switch to the task's tab if it exists
+                const taskTabButton = document.querySelector(`.tab-button[data-tab="task-${taskId}"]`);
+                if (taskTabButton) {
+                    this.switchTab(`task-${taskId}`);
+                }
+            }
+
+            switchTab(tabName) {
+                // Update active tab button
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    button.classList.remove('active');
+                });
+
+                const activeButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
+                if (activeButton) {
+                    activeButton.classList.add('active');
+                }
+
+                // Update active tab content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+
+                const activeContent = document.querySelector(`.tab-content[data-tab-content="${tabName}"]`);
+                if (activeContent) {
+                    activeContent.classList.add('active');
+                }
+            }
+
+            setFilter(filter) {
+                // Update active filter button
+                document.querySelectorAll('.filter-button').forEach(button => {
+                    button.classList.remove('active');
+                });
+
+                const activeButton = document.querySelector(`.filter-button[data-filter="${filter}"]`);
+                if (activeButton) {
+                    activeButton.classList.add('active');
+                }
+
+                // Filter task cards
+                this.filterTasks(filter);
+            }
+
+            filterTasks(filter) {
+                document.querySelectorAll('.task-card').forEach(card => {
+                    const taskId = card.dataset.taskId;
+                    const task = this.tasks[taskId];
+
+                    let show = true;
+
+                    if (filter === 'orchestrator') {
+                        show = taskId === 'orchestrator';
+                    } else if (filter === 'task') {
+                        show = taskId !== 'orchestrator';
+                    }
+                    // 'all' shows everything
+
+                    if (show) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+            }
+
+            addLogToDisplay(event) {
+                // Determine which log to add to based on event type/task
+                let logElement;
+
+                if (event.type === 'orchestrator' || event.data.task_id === 'orchestrator') {
+                    logElement = document.getElementById('orchestrator-log');
+                } else {
+                    logElement = document.getElementById('all-agents-log');
+                }
+
+                if (!logElement) return;
+
+                // Create log entry
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+
+                const timestamp = new Date(event.timestamp).toLocaleTimeString();
+                const taskId = event.data.task_id || 'unknown';
+                const message = this.formatLogMessage(event);
+
+                logEntry.innerHTML = `
+                    <span class="log-timestamp">[${timestamp}]</span>
+                    <span class="log-task-id">[${taskId}]</span>
+                    <span class="log-message">${message}</span>
+                `;
+
+                logElement.appendChild(logEntry);
+
+                // Auto-scroll if near bottom
+                if (logElement.scrollTop + logElement.clientHeight >= logElement.scrollHeight - 50) {
+                    logElement.scrollTop = logElement.scrollHeight;
+                }
+            }
+
+            formatLogMessage(event) {
+                switch (event.type) {
+                    case 'log':
+                        return `[${event.data.level}] ${event.data.message}`;
+                    case 'task':
+                        return `Task ${event.data.status} (attempt ${event.data.attempts})`;
+                    case 'out':
+                        return `[${event.data.kind}] ${event.data.text}`;
+                    case 'approval':
+                        return `Approval requested for task ${event.data.task_id}`;
+                    case 'approved':
+                        return `Task ${event.data.task_id} approved`;
+                    case 'done':
+                        return `Orchestration completed`;
+                    default:
+                        return JSON.stringify(event.data);
+                }
+            }
+
+            updateUI() {
+                // Update task cards
+                this.renderTaskCards();
+
+                // Update statistics
+                this.updateStatistics();
+
+                // Check for completion
+                this.checkCompletion();
+            }
+
+            renderTaskCards() {
+                const container = document.getElementById('task-cards-container');
+                container.innerHTML = '';
+
+                // Sort tasks: orchestrator first, then by status priority
+                const taskArray = Object.values(this.tasks);
+                taskArray.sort((a, b) => {
+                    // Orchestrator always first
+                    if (a.id === 'orchestrator') return -1;
+                    if (b.id === 'orchestrator') return 1;
+
+                    // Status priority: pending > starting > running > reviewing > retrying > merging > merged > failed > skipped
+                    const statusPriority = {
+                        pending: 0,
+                        starting: 1,
+                        running: 2,
+                        reviewing: 3,
+                        retrying: 4,
+                        merging: 5,
+                        merged: 6,
+                        failed: 7,
+                        skipped: 8
+                    };
+
+                    return (statusPriority[a.status] || 99) - (statusPriority[b.status] || 99);
+                });
+
+                taskArray.forEach(task => {
+                    const taskCard = document.createElement('div');
+                    taskCard.className = 'task-card';
+                    taskCard.dataset.taskId = task.id;
+
+                    // Determine status class
+                    let statusClass = 'status-pending';
+                    if (task.status) {
+                        statusClass = `status-${task.status}`;
+                    }
+
+                    taskCard.innerHTML = `
+                        <div class="task-status ${statusClass}">${this.capitalizeFirstLetter(task.status)}</div>
+                        <div class="task-title">${this.escapeHtml(task.title || `Task ${task.id}`)}</div>
+                        <div class="task-meta">
+                            <span>Attempts: ${task.attempts || 0}</span>
+                            <span>Cost: $${(task.cost || 0).toFixed(3)}</span>
+                        </div>
+                        ${task.dependencies && task.dependencies.length > 0 ? `
+                        <div class="task-deps">
+                            Deps: ${task.dependencies.map(dep => `<span>${this.escapeHtml(dep)}</span>`).join('')}
+                        </div>
+                        ` : ''}
+                    `;
+
+                    container.appendChild(taskCard);
+                });
+            }
+
+            updateStatistics() {
+                const totalTasks = Object.keys(this.tasks).length;
+                const completedTasks = Object.values(this.tasks).filter(t => t.status === 'merged').length;
+                const runningTasks = Object.values(this.tasks).filter(t =>
+                    ['starting', 'running', 'reviewing', 'retrying', 'merging'].includes(t.status)
+                ).length;
+                const failedTasks = Object.values(this.tasks).filter(t => t.status === 'failed').length;
+
+                document.getElementById('total-tasks').textContent = totalTasks;
+                document.getElementById('completed-tasks').textContent = completedTasks;
+                document.getElementById('running-tasks').textContent = runningTasks;
+                document.getElementById('failed-tasks').textContent = failedTasks;
+            }
+
+            checkCompletion() {
+                const allTasks = Object.values(this.tasks);
+                if (allTasks.length === 0) return;
+
+                const allCompleted = allTasks.every(t =>
+                    t.status === 'merged' || t.status === 'skipped'
+                );
+
+                const doneBanner = document.getElementById('done-banner');
+                if (allCompleted) {
+                    doneBanner.classList.remove('hidden');
+                    doneBanner.classList.add('visible');
+                } else {
+                    doneBanner.classList.add('hidden');
+                    doneBanner.classList.remove('visible');
+                }
+            }
+
+            capitalizeFirstLetter(string) {
+                if (!string) return '';
+                return string.charAt(0).toUpperCase() + string.slice(1);
+            }
+
+            escapeHtml(text) {
+                const map = {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                };
+
+                return text.replace(/[&<>"']/g, m => map[m]);
+            }
+        }
+
+        // Initialize the GUI when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.swarmGUI = new SwarmWebGUI();
+        });
+    </script>
+</body>
+</html>
