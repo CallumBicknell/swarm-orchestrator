@@ -135,6 +135,9 @@ class SwarmTUI(App):
         goal_input = self.query_one("#goal-input", Input)
         goal_input.value = ""
 
+        # Switch to Orchestrator tab immediately so user sees progress
+        self.query_one("#tabs").active = "orchestrator-tab"
+
         # Start orchestrator in background
         self.orchestrator_task = asyncio.create_task(self._run_orchestrator(goal))
 
