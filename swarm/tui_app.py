@@ -4,6 +4,7 @@ Using the textual library to create a terminal-based user interface.
 """
 
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set
@@ -216,11 +217,13 @@ class SwarmTUI(App):
     async def _run_orchestrator(self, goal: str) -> None:
         """Run the orchestrator with the given goal."""
         try:
-            # Create orchestrator
+            # Create orchestrator with disabled logging to prevent stdout interference
             orchestrator = SwarmOrchestrator(
                 repo_path=Path("."),
                 use_fake_claude=True  # Use fake Claude for testing
             )
+            # Disable orchestrator's logging to prevent stdout interference with TUI
+            orchestrator.logger.disabled = True
 
             # Start the run
             run_id = await orchestrator.start_run(goal)
