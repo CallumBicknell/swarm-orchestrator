@@ -99,7 +99,3 @@ Button {
 Button:hover {
     background: #0099ff;
 }
-
-Button:active {
-    background: #005fa3;
-}
