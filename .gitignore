@@ -1,2 +1,33 @@
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Orchestrator working directories
+.orch/
+.orch/**/
+*.log
+
+# Environment variables
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*~
