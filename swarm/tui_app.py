@@ -5,6 +5,7 @@ Using the textual library to create a terminal-based user interface.
 
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Set
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -97,6 +98,12 @@ class SwarmTUI(App):
         """Called when the app is mounted."""
         self.setup_task_table()
         self.set_interval(1 / 4, self.update_from_queue)  # Update 4 times per second
+        # Add initial tabs
+        tabs = self.query_one("#tabs", TabbedContent)
+        tabs.add_pane(TabPane("All Agents", id="all-agents-tab"))
+        # Initialize orchestrator tab with a label for messages
+        orchestrator_label = Label("Orchestrator output will appear here...", id="orchestrator-output")
+        tabs.add_pane(TabPane("Orchestrator", orchestrator_label, id="orchestrator-tab"))
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
