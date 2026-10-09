@@ -50,8 +50,8 @@ class SwarmTUI(App):
         self.logs: List[LogEvent] = []
         self.selected_task_id: Optional[str] = None
         # Subscribe to events
-        self.event_bus._subscribers.add(self._event_queue)
         self._event_queue: asyncio.Queue = asyncio.Queue()
+        self.event_bus._subscribers.add(self._event_queue)
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
