@@ -216,18 +216,21 @@ class SwarmTUI(App):
 
     async def _run_orchestrator(self, goal: str) -> None:
         """Run the orchestrator with the given goal."""
+        # Disable all logging to prevent stdout interference with TUI
+        logging.getLogger().disabled = True
         try:
-            # Create orchestrator with disabled logging to prevent stdout interference
+            # Create orchestrator
             orchestrator = SwarmOrchestrator(
                 repo_path=Path("."),
                 use_fake_claude=True  # Use fake Claude for testing
             )
-            # Disable orchestrator's logging to prevent stdout interference with TUI
-            orchestrator.logger.disabled = True
 
             # Start the run
             run_id = await orchestrator.start_run(goal)
             self.notify(f"Started orchestrator run: {run_id}")
+
+            # Switch to Orchestrator tab so user can see progress
+            self.query_one("#tabs").active = "orchestrator-tab"
 
             # Update orchestrator tab with run info
             await self.update_orchestrator_tab(f"Started run {run_id}: {goal}")
@@ -246,6 +249,8 @@ class SwarmTUI(App):
             self.notify(f"Error running orchestrator: {str(e)}")
             await self.update_orchestrator_tab(f"Error: {str(e)}")
         finally:
+            # Re-enable logging
+            logging.getLogger().disabled = False
             # Clean up
             self.orchestrator_task = None
 
