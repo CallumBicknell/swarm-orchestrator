@@ -20,7 +20,13 @@ try:
 except ImportError:
     # When used directly or in tests
     from core import EventBus, LogEvent, EventType
-from .planner import Task
+
+try:
+    # When used as part of the swarm package
+    from .planner import Task
+except ImportError:
+    # When used directly or in tests
+    from planner import Task
 
 
 class SwarmTUI(App):
